@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>智控慧学 · 教师控制台</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        .container { width: 100%; max-width: 700px; }
+        .card {
+            background: white;
+            border-radius: 24px;
+            padding: 32px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            margin-bottom: 20px;
+        }
+        h2 {
+            color: #333;
+            margin-bottom: 24px;
+            font-size: 24px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .input-group { margin-bottom: 20px; }
+        .input-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #555;
+            font-weight: 500;
+        }
+        .input-group input, .input-group textarea {
+            width: 100%;
+            padding: 14px 16px;
+            border: 2px solid #e0e0e0;
+            border-radius: 12px;
+            font-size: 16px;
+            font-family: inherit;
+        }
+        .input-group textarea {
+            resize: vertical;
+            background: #f9f9f9;
+        }
+        .btn {
+            width: 100%;
+            padding: 16px 24px;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-bottom: 10px;
+            transition: 0.2s;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        .btn-secondary { background: #f0f0f0; color: #333; }
+        .btn-warning { background: #ffc107; color: #333; }
+        .mode-buttons {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+        .mode-btn {
+            padding: 20px;
+            border: 3px solid #e0e0e0;
+            border-radius: 16px;
+            background: white;
+            font-size: 18px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+        }
+        .mode-btn .emoji { font-size: 32px; }
+        .mode-btn.active {
+            border-color: #667eea;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        .status-badge {
+            background: #eef4ff;
+            color: #4a90e2;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 14px;
+            margin-left: 10px;
+        }
+        .hidden { display: none !important; }
+        .message { padding: 12px; border-radius: 12px; margin-top: 16px; }
+        .message.success { background: #d4edda; color: #155724; }
+        .message.error { background: #f8d7da; color: #721c24; }
+        .note { font-size: 13px; color: #666; margin-top: 8px; }
+        .password-box {
+            margin-top: 20px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 16px;
+        }
+    </style>
+</head>
+<body>
+<div id="login-card" class="card">
+    <h2>🔐 教师控制台登录</h2>
+    <div class="input-group">
+        <label>管理员密码</label>
+        <input type="password" id="login-password" placeholder="请输入管理员密码" value="">
+    </div>
+    <button class="btn btn-primary" onclick="login()">登录</button>
+    <div id="login-error" class="message error hidden">密码错误</div>
+</div>
+
+<div id="main-console" class="hidden">
+    <!-- 首次配置卡片 -->
+    <div class="card" id="config-card">
+        <h2>⚙️ 连接 Coze 工作流</h2>
+        <div class="input-group">
+            <label>工作流 ID</label>
+            <input type="text" id="workflow-id-input" placeholder="例如：7380000000000000000">
+        </div>
+        <div class="input-group">
+            <label>API 访问令牌</label>
+            <input type="password" id="api-token-input" placeholder="粘贴你的个人访问令牌">
+        </div>
+        <div class="input-group">
+            <label>管理员密码（可修改，留空则保持默认123456）</label>
+            <input type="password" id="admin-password-input" placeholder="设置新密码">
+        </div>
+        <button class="btn btn-primary" onclick="saveConfig()">保存并进入控制台</button>
+        <div class="note">配置将保存在本地，仅你可见。</div>
+    </div>
+
+    <!-- 主控制面板 -->
+    <div id="control-panel" class="hidden">
+        <div class="card">
+            <h2>🎛️ 教学模式控制 <span class="status-badge" id="current-mode-badge">当前：启发模式</span></h2>
+            <div class="mode-buttons">
+                <button class="mode-btn active" id="guide-mode-btn" onclick="requestSetMode('guide')">
+                    <span class="emoji">💡</span>启发模式
+                </button>
+                <button class="mode-btn" id="answer-mode-btn" onclick="requestSetMode('answer')">
+                    <span class="emoji">📝</span>答案模式
+                </button>
+            </div>
+            <div id="mode-status-message" class="message success">当前模式：启发模式</div>
+            
+            <!-- 嵌入式密码验证框（默认隐藏） -->
+            <div id="mode-password-box" class="password-box hidden">
+                <label style="display:block; margin-bottom:12px;">请输入管理员密码以切换模式</label>
+                <input type="password" id="mode-password-input" class="input-group" style="margin-bottom:12px;" placeholder="密码">
+                <div style="display:flex; gap:10px;">
+                    <button class="btn btn-primary" onclick="confirmSetMode()">确认切换</button>
+                    <button class="btn btn-secondary" onclick="cancelSetMode()">取消</button>
+                </div>
+            </div>
+
+            <button class="btn btn-warning" id="refresh-student-btn" onclick="refreshStudent()">🔄 刷新学生端</button>
+        </div>
+
+        <div class="card">
+            <h2>📝 自定义系统提示词</h2>
+            <div class="input-group">
+                <label>启发模式默认提示词（参考）</label>
+                <textarea rows="6" readonly>你是一位启发式导师，严格遵循以下规则：
+1. 永远不要直接给出最终答案、代码、公式或完整结论。
+2. 每次回复必须包含以下结构（用换行分隔）：
+   【问题拆解】将用户的问题分解为2-3个关键子问题。
+   【核心思路】用一句话指出解决方向（不涉及具体步骤）。
+   【第一步引导】提出一个具体的、可执行的问题或提示，引导学生迈出第一步。
+3. 使用清晰的换行和编号，让回复易于阅读。
+4. 如果学生直接索要答案，请反问他们已知条件和尝试过的思路。</textarea>
+            </div>
+            <div class="input-group">
+                <label>答案模式默认提示词（参考）</label>
+                <textarea rows="4" readonly>你是学习助手，可以提供完整详细的解答。回答请使用清晰的段落和换行，结构清晰。</textarea>
+            </div>
+            <div class="input-group">
+                <label>✏️ 自定义提示词（覆盖默认，可选）</label>
+                <textarea id="custom-prompt-input" rows="6" placeholder="在此输入自定义的系统提示词，留空则使用默认..."></textarea>
+            </div>
+            <button class="btn btn-primary" onclick="applyCustomPrompt()">🔒 应用自定义提示词</button>
+            <div class="note">应用后，学生端的对话将使用此提示词（需密码验证）。</div>
+        </div>
+
+        <div class="card">
+            <h2>📋 其他</h2>
+            <button class="btn btn-secondary" onclick="resetConfig()">⚙️ 修改配置</button>
+            <button class="btn btn-secondary" onclick="logout()">🚪 退出登录</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    // ---------- 配置常量 ----------
+    const STORAGE_KEY = 'teacher_console_config_v2';
+    const DEFAULT_PASSWORD = '123456';
+
+    // ---------- 全局状态 ----------
+    let config = { workflowId: '', apiToken: '', adminPassword: DEFAULT_PASSWORD };
+    let currentMode = 'guide';
+    let currentCustomPrompt = '';
+    let pendingMode = null;
+
+    // ---------- 辅助函数 ----------
+    function loadConfig() {
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (saved) {
+            try { config = JSON.parse(saved); } catch(e) {}
+        }
+        document.getElementById('workflow-id-input').value = config.workflowId || '';
+        document.getElementById('api-token-input').value = config.apiToken || '';
+        // 密码不回显，但保留在config中
+        document.getElementById('admin-password-input').value = '';
+    }
+
+    function saveConfig() {
+        config.workflowId = document.getElementById('workflow-id-input').value.trim();
+        config.apiToken = document.getElementById('api-token-input').value.trim();
+        const newPwd = document.getElementById('admin-password-input').value.trim();
+        if (newPwd) {
+            config.adminPassword = newPwd;
+        } else {
+            // 如果未填写，保持原密码或默认
+            if (!config.adminPassword) config.adminPassword = DEFAULT_PASSWORD;
+        }
+
+        if (!config.workflowId || !config.apiToken) {
+            alert('请填写工作流 ID 和 API 令牌');
+            return;
+        }
+
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
+        document.getElementById('config-card').classList.add('hidden');
+        document.getElementById('control-panel').classList.remove('hidden');
+        updateModeUI(currentMode);
+    }
+
+    function resetConfig() {
+        if (confirm('确定要修改配置吗？')) {
+            document.getElementById('config-card').classList.remove('hidden');
+            document.getElementById('control-panel').classList.add('hidden');
+            loadConfig();
+        }
+    }
+
+    function login() {
+        const pw = document.getElementById('login-password').value;
+        const saved = localStorage.getItem(STORAGE_KEY);
+        let correct = DEFAULT_PASSWORD;
+        if (saved) {
+            try { correct = JSON.parse(saved).adminPassword || DEFAULT_PASSWORD; } catch(e) {}
+        }
+        if (pw === correct) {
+            document.getElementById('login-card').classList.add('hidden');
+            document.getElementById('main-console').classList.remove('hidden');
+            loadConfig();
+            const savedCfg = localStorage.getItem(STORAGE_KEY);
+            if (savedCfg) {
+                const cfg = JSON.parse(savedCfg);
+                if (cfg.workflowId && cfg.apiToken) {
+                    document.getElementById('config-card').classList.add('hidden');
+                    document.getElementById('control-panel').classList.remove('hidden');
+                    updateModeUI(currentMode);
+                } else {
+                    document.getElementById('config-card').classList.remove('hidden');
+                    document.getElementById('control-panel').classList.add('hidden');
+                }
+            } else {
+                document.getElementById('config-card').classList.remove('hidden');
+                document.getElementById('control-panel').classList.add('hidden');
+            }
+        } else {
+            document.getElementById('login-error').classList.remove('hidden');
+        }
+    }
+
+    function logout() {
+        document.getElementById('main-console').classList.add('hidden');
+        document.getElementById('login-card').classList.remove('hidden');
+        document.getElementById('login-password').value = '';
+    }
+
+    function updateModeUI(mode) {
+        currentMode = mode;
+        document.getElementById('guide-mode-btn').classList.toggle('active', mode === 'guide');
+        document.getElementById('answer-mode-btn').classList.toggle('active', mode === 'answer');
+        document.getElementById('current-mode-badge').textContent = mode === 'guide' ? '当前：启发模式' : '当前：答案模式';
+        document.getElementById('mode-status-message').textContent = `当前模式：${mode === 'guide' ? '启发模式' : '答案模式'}`;
+    }
+
+    // ---------- 模式切换（显示密码框）----------
+    function requestSetMode(mode) {
+        if (!config.workflowId || !config.apiToken) {
+            alert('请先完成“连接 Coze 工作流”配置');
+            return;
+        }
+        pendingMode = mode;
+        document.getElementById('mode-password-box').classList.remove('hidden');
+        document.getElementById('mode-password-input').value = '';
+        document.getElementById('mode-password-input').focus();
+    }
+
+    async function confirmSetMode() {
+        const pw = document.getElementById('mode-password-input').value;
+        const correct = config.adminPassword || DEFAULT_PASSWORD;
+        if (pw !== correct) {
+            alert('密码错误');
+            return;
+        }
+        document.getElementById('mode-password-box').classList.add('hidden');
+        const success = await callWorkflowAPI(pendingMode, currentCustomPrompt);
+        if (success) {
+            updateModeUI(pendingMode);
+            alert(`✅ 已切换至${pendingMode === 'guide' ? '启发模式' : '答案模式'}`);
+        } else {
+            alert('❌ 切换失败，请检查网络或配置');
+        }
+        pendingMode = null;
+    }
+
+    function cancelSetMode() {
+        document.getElementById('mode-password-box').classList.add('hidden');
+        pendingMode = null;
+    }
+
+    // ---------- 自定义提示词 ----------
+    async function applyCustomPrompt() {
+        // 同样需要密码验证
+        const pw = prompt('请输入管理员密码以应用自定义提示词：');
+        const correct = config.adminPassword || DEFAULT_PASSWORD;
+        if (pw !== correct) {
+            alert('密码错误');
+            return;
+        }
+        currentCustomPrompt = document.getElementById('custom-prompt-input').value.trim();
+        const success = await callWorkflowAPI(currentMode, currentCustomPrompt);
+        if (success) {
+            alert('✅ 自定义提示词已应用');
+        } else {
+            alert('❌ 应用失败');
+        }
+    }
+
+    // ---------- Coze 工作流 API 调用 ----------
+    async function callWorkflowAPI(mode, customPrompt = '') {
+        const { workflowId, apiToken } = config;
+        if (!workflowId || !apiToken) {
+            alert('请先完成配置');
+            return false;
+        }
+        try {
+            const res = await fetch('https://api.coze.cn/v1/workflow/run', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${apiToken}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    workflow_id: workflowId,
+                    parameters: {
+                        mode: mode,
+                        user_input: '',
+                        custom_system_prompt: customPrompt || ''
+                    }
+                })
+            });
+            if (!res.ok) {
+                const err = await res.text();
+                console.error('API 错误:', err);
+                return false;
+            }
+            return true;
+        } catch (e) {
+            console.error('请求异常:', e);
+            return false;
+        }
+    }
+
+    // ---------- 刷新学生端 (Electron) ----------
+    function refreshStudent() {
+        if (window.electronAPI) {
+            window.electronAPI.refreshStudent();
+            alert('✅ 已向学生端发送刷新指令');
+        } else {
+            alert('⚠️ 此功能仅在桌面应用中可用');
+        }
+    }
+
+    // 控制刷新按钮显示
+    if (window.electronAPI) {
+        document.getElementById('refresh-student-btn').style.display = 'block';
+    } else {
+        document.getElementById('refresh-student-btn').style.display = 'none';
+    }
+
+    // 监听回车登录
+    document.getElementById('login-password').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') login();
+    });
+    document.getElementById('mode-password-input').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') confirmSetMode();
+    });
+
+    // 初始化
+    loadConfig();
+</script>
+</body>
+</html>
